@@ -25,7 +25,7 @@ SECRET_KEY = None
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'local.sitebias.com', 'www.sitebias.com']
 
 
 # Application definition
@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'feedz',
+    'sitebias_core',
 ]
 
 MIDDLEWARE = [
@@ -114,6 +115,7 @@ USE_L10N = True
 
 USE_TZ = True
 
+ADMIN_SITE_HEADER = "Sitebias Administration"
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.11/howto/static-files/

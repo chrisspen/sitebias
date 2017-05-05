@@ -14,4 +14,5 @@ echo "Creating database..."
 psql --user=postgres --no-password --command="CREATE DATABASE $DB_NAME WITH OWNER=$DB_USERNAME ENCODING='UTF8' LC_CTYPE='en_US.UTF-8' LC_COLLATE='en_US.UTF-8'"
 echo "Populating schema..."
 .env/bin/python manage.py migrate --run-syncdb
+.env/bin/python manage.py createsuperuser --username=admin
 echo "Done!"

@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'feedz',
 ]
 
 MIDDLEWARE = [
@@ -119,4 +120,4 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-from settings_sensitive import *
+from .settings_sensitive import *

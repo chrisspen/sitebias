@@ -1,7 +1,7 @@
 from __future__ import with_statement, print_function
 
 import sys
-from optparse import make_option
+#from optparse import make_option
 
 from django.core.management.base import BaseCommand
 
@@ -12,7 +12,7 @@ class Command(BaseCommand):
     help = "Updates organizations."
 
     args = 'org.id'
-    
+
     def create_parser(self, prog_name, subcommand):
         parser = super(Command, self).create_parser(prog_name, subcommand)
         parser.add_argument('args', nargs="*")

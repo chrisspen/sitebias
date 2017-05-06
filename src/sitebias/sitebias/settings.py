@@ -122,4 +122,9 @@ ADMIN_SITE_HEADER = "Sitebias Administration"
 
 STATIC_URL = '/static/'
 
-from .settings_sensitive import *
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 100000
+
+FEEDZ_GET_ARTICLE_CONTENT = True
+FEEDZ_ARTICLE_EXTRACTOR = 'sitebias_core.utils.get_newspaper_text'
+
+from .settings_sensitive import * # pylint: disable=wrong-import-position

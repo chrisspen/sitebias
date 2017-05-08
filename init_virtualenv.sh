@@ -4,4 +4,4 @@ set -e
 [ -d .env ] && rm -Rf .env
 virtualenv -p python3 .env
 . .env/bin/activate
-pip install -r pip-requirements.txt
+pip install  --only-binary numpy,matplotlib,scipy,scikit-learn -r pip-requirements.txt

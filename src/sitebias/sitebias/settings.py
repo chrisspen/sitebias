@@ -126,5 +126,8 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 100000
 
 FEEDZ_GET_ARTICLE_CONTENT = True
 FEEDZ_ARTICLE_EXTRACTOR = 'sitebias_core.utils.get_newspaper_text'
+FEEDZ_EXTRACT_NGRAMS = True
+FEEDZ_MIN_NGRAM = 1
+FEEDZ_MAX_NGRAM = 5
 
 from .settings_sensitive import * # pylint: disable=wrong-import-position

@@ -5,7 +5,7 @@ from feedz.models import Feed
 
 from admin_steroids.utils import view_link
 
-from . import models
+from . import models # pylint: disable=no-name-in-module
 
 class FeedInline(admin.TabularInline):
 
@@ -67,4 +67,97 @@ class OrganizationAdmin(admin.ModelAdmin):
         FeedInline,
     ]
 
+class OrganizationFeatureAdmin(admin.ModelAdmin):
+
+    list_display = [
+        'organization',
+        'start_date',
+        'end_date',
+        'fresh',
+    ]
+
+    list_filter = [
+        'fresh',
+    ]
+
+    search_fields = [
+        'organization__name',
+    ]
+
+    readonly_fields = [
+        'organization',
+        'start_date',
+        'end_date',
+        'fresh',
+        'ngram_counts',
+    ]
+
+class ClusterPriorInline(admin.TabularInline):
+    
+    model = models.ClusterPrior
+    
+    fields = (
+        'organization',
+        'index',
+    )
+    
+    raw_id_fields = [
+        'organization',
+    ]
+    
+    extra = 0
+
+class ClusterCriteriaAdmin(admin.ModelAdmin):
+
+    list_display = [
+        'algorithm',
+        'start_date',
+        'number_of_clusters',
+    ]
+
+    readonly_fields = [
+        'label_link',
+    ]
+    
+    inlines = [
+        ClusterPriorInline,
+    ]
+
+    def label_link(self, obj=None):
+        try:
+            if not obj or not obj.id:
+                return ''
+            qs = obj.labels.all()
+            total = qs.count()
+            return '<a class="btn button" href="../../../clusterlabel/?criteria__id__exact=%i">View %i</a>' % (obj.id, total)
+        except Exception as e:
+            return str(e)
+    label_link.short_description = 'labels'
+    label_link.allow_tags = True
+
+class ClusterLabelAdmin(admin.ModelAdmin):
+
+    list_display = [
+        'criteria',
+        'organization',
+        'start_date',
+        'end_date',
+        'index',
+    ]
+
+    list_filter = [
+        'criteria',
+    ]
+
+    readonly_fields = [
+        'criteria',
+        'organization',
+        'start_date',
+        'end_date',
+        'index',
+    ]
+
 admin.site.register(models.Organization, OrganizationAdmin)
+admin.site.register(models.OrganizationFeature, OrganizationFeatureAdmin)
+admin.site.register(models.ClusterCriteria, ClusterCriteriaAdmin)
+admin.site.register(models.ClusterLabel, ClusterLabelAdmin)

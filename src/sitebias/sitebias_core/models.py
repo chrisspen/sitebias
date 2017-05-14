@@ -53,6 +53,16 @@ class Organization(BaseModel):
     def __str__(self):
         return self.name
 
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.name == other.name
+
+    def __lt__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.name < other.name
+
     def natural_key(self):
         return (self.homepage,)
 
@@ -112,6 +122,19 @@ class OrganizationFeature(BaseModel):
             'organization',
             'start_date',
         )
+        
+    def get_all_text(self, keywords=''):
+        keywords = (keywords or '').strip().lower()
+        posts = Post.objects.filter(
+            feed__organizationfeed__organization=self.organization,
+            date_published__gte=self.start_date,
+            date_published__lte=self.end_date,
+            article_content_length__gt=0)
+        for post in posts:
+            text = (post.article_content or '').strip().lower()
+            if keywords and keywords not in text:
+                continue
+            yield text
 
     @classmethod
     def update_all(cls, force=False):
@@ -182,13 +205,6 @@ def post_post_save(sender, **kwargs):
     feature.fresh = False
     feature.save()
 
-KMEANS = 'kmeans'
-KMEANS_EVEN = 'kmeans-even'
-ALGORITHM_CHOICES = [
-    (KMEANS, 'K-Means'),
-    (KMEANS_EVEN, 'K-Means-Even'),
-]
-
 class TFIDF(object):
 
     def __init__(self):
@@ -248,6 +264,13 @@ class TFIDF(object):
         return tf * idf
 
 class ClusterCriteria(BaseModel):
+    
+    KMEANS = 'kmeans'
+    KMEANS_EVEN = 'kmeans-even'
+    ALGORITHM_CHOICES = [
+        (KMEANS, 'K-Means'),
+        (KMEANS_EVEN, 'K-Means-Even'),
+    ]
 
     number_of_clusters = models.PositiveIntegerField(default=2, blank=False, null=False)
 
@@ -499,4 +522,23 @@ class ClusterLabel(BaseModel):
     class Meta:
         unique_together = (
             ('criteria', 'organization', 'start_date', 'end_date'),
+        )
+
+class ClusterLink(BaseModel):
+    
+    criteria = models.ForeignKey(ClusterCriteria, related_name='links')
+    
+    from_organization = models.ForeignKey(Organization, related_name='from_links')
+
+    start_date = models.DateField(blank=False, null=False)
+
+    end_date = models.DateField(blank=False, null=False)
+    
+    to_organization = models.ForeignKey(Organization, related_name='to_links')
+    
+    weight = models.FloatField(blank=True, null=True)
+
+    class Meta:
+        unique_together = (
+            ('criteria', 'from_organization', 'start_date', 'end_date', 'to_organization'),
         )

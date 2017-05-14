@@ -41,6 +41,7 @@ class OrganizationAdmin(admin.ModelAdmin):
         'homepage',
         'feed_count',
         'active_feed_count',
+        'post_count',
     ]
 
     readonly_fields = [
@@ -48,6 +49,7 @@ class OrganizationAdmin(admin.ModelAdmin):
         'updated',
         'feed_count',
         'active_feed_count',
+        'post_count',
     ]
 
     search_fields = [
@@ -66,6 +68,15 @@ class OrganizationAdmin(admin.ModelAdmin):
     inlines = [
         FeedInline,
     ]
+    
+    def post_count(self, obj):
+        try:
+            from feedz.models import Post
+            posts = Post.objects.filter(feed__organizationfeed__organization=obj)
+            return posts.count()
+        except Exception as e:
+            return str(e)
+    post_count.short_description = 'posts'
 
 class OrganizationFeatureAdmin(admin.ModelAdmin):
 
@@ -157,7 +168,32 @@ class ClusterLabelAdmin(admin.ModelAdmin):
         'index',
     ]
 
+class ClusterLinkAdmin(admin.ModelAdmin):
+    
+    list_display = [
+        'criteria',
+        'from_organization',
+        'start_date',
+        'end_date',
+        'to_organization',
+        'weight',
+    ]
+
+    list_filter = [
+        'criteria',
+    ]
+
+    readonly_fields = [
+        'criteria',
+        'from_organization',
+        'start_date',
+        'end_date',
+        'to_organization',
+        'weight',
+    ]
+
 admin.site.register(models.Organization, OrganizationAdmin)
 admin.site.register(models.OrganizationFeature, OrganizationFeatureAdmin)
 admin.site.register(models.ClusterCriteria, ClusterCriteriaAdmin)
 admin.site.register(models.ClusterLabel, ClusterLabelAdmin)
+admin.site.register(models.ClusterLink, ClusterLinkAdmin)

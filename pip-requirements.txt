@@ -7,3 +7,4 @@ newspaper3k
 scikit-learn
 numpy
 scipy
+google-api-python-client

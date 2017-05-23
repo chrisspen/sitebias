@@ -107,7 +107,7 @@ class KMeansEven(object):
             # checking to re-add it.
             if last_cluster and cluster is last_cluster:
                 continue
-            
+
             # Skip clusters that have no room.
             #TODO:fix? This was a workaround to prevent cases where a point
             # is equally fit for two clusters can infinitely keeps getting popped from one to the other.
@@ -152,7 +152,7 @@ class KMeansEven(object):
         recluster_count = 0
         cluster_key_size = 0
         iterations = 0
-        while len(data):
+        while data:
             iterations += 1
             total = len(data)
             print('Cluster point distribution: %s' %  (', '.join(['%s: %i' % (cluster, len(cluster.points)) for cluster in self.clusters])))

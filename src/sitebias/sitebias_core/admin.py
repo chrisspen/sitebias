@@ -68,7 +68,7 @@ class OrganizationAdmin(admin.ModelAdmin):
     inlines = [
         FeedInline,
     ]
-    
+
     def post_count(self, obj):
         try:
             from feedz.models import Post
@@ -104,18 +104,18 @@ class OrganizationFeatureAdmin(admin.ModelAdmin):
     ]
 
 class ClusterPriorInline(admin.TabularInline):
-    
+
     model = models.ClusterPrior
-    
+
     fields = (
         'organization',
         'index',
     )
-    
+
     raw_id_fields = [
         'organization',
     ]
-    
+
     extra = 0
 
 class ClusterCriteriaAdmin(admin.ModelAdmin):
@@ -124,14 +124,23 @@ class ClusterCriteriaAdmin(admin.ModelAdmin):
         'algorithm',
         'start_date',
         'number_of_clusters',
+        'term',
     ]
+
+    list_filter = (
+        'algorithm',
+    )
 
     readonly_fields = [
         'label_link',
     ]
-    
+
+    search_fields = (
+        'term',
+    )
+
     inlines = [
-        ClusterPriorInline,
+        #ClusterPriorInline,
     ]
 
     def label_link(self, obj=None):
@@ -154,10 +163,12 @@ class ClusterLabelAdmin(admin.ModelAdmin):
         'start_date',
         'end_date',
         'index',
+        'logprob',
     ]
 
     list_filter = [
         'criteria',
+        'organization',
     ]
 
     readonly_fields = [
@@ -166,10 +177,11 @@ class ClusterLabelAdmin(admin.ModelAdmin):
         'start_date',
         'end_date',
         'index',
+        'logprob',
     ]
 
 class ClusterLinkAdmin(admin.ModelAdmin):
-    
+
     list_display = [
         'criteria',
         'from_organization',

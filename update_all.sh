@@ -10,5 +10,9 @@ echo "Refreshing feeds..."
 echo "Retrieving article text..."
 ./manage.py extract_post_articles --traceback
 
-echo "Calculating n-grams..."
-./manage.py extract_post_ngrams --traceback
+#echo "Calculating n-grams..."
+#./manage.py extract_post_ngrams --traceback
+
+echo "Updating criteria..."
+./manage.py update_organizations --traceback --features
+./manage.py update_organizations --traceback --clusters --criterias=6

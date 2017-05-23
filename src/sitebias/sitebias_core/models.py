@@ -1,23 +1,20 @@
+import time
 from datetime import date
 import sys
-import calendar
 from collections import defaultdict
-from math import log
+from math import log, e
 
 from django.db import models
+from django.db.models import F
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from picklefield.fields import PickledObjectField
 
-print('Loading scipy...')
-from sklearn.feature_extraction import DictVectorizer
-from sklearn.cluster import KMeans
-#from scipy.sparse import vstack
-
 from feedz.feedutil import search_links_url
 from feedz.models import Feed, Post#, NGram
 
+from .utils import dt_to_month_range
 from .clustering.kmeanseven import KMeansEven
 
 class BaseModel(models.Model):
@@ -25,6 +22,8 @@ class BaseModel(models.Model):
     created = models.DateTimeField(auto_now_add=True)
 
     updated = models.DateTimeField(auto_now=True)
+
+    fresh = models.BooleanField(default=False, db_index=True, editable=False)
 
     class Meta:
         abstract = True
@@ -122,9 +121,10 @@ class OrganizationFeature(BaseModel):
             'organization',
             'start_date',
         )
-        
+
     def get_all_text(self, keywords=''):
-        keywords = (keywords or '').strip().lower()
+        keywords = (keywords or '').strip().lower().split('|')
+        keywords = [_.strip() for _ in keywords if _.strip()]
         posts = Post.objects.filter(
             feed__organizationfeed__organization=self.organization,
             date_published__gte=self.start_date,
@@ -132,16 +132,37 @@ class OrganizationFeature(BaseModel):
             article_content_length__gt=0)
         for post in posts:
             text = (post.article_content or '').strip().lower()
-            if keywords and keywords not in text:
-                continue
+            if keywords:
+                found = False
+                for keyword in keywords:
+                    #TODO:check with \b regex?
+                    if keyword in text:
+                        found = True
+                        break
+                if not found:
+                    continue
             yield text
 
     @classmethod
-    def update_all(cls, force=False):
+    def update_all(cls, force=False, do_ngrams=False):
 
         # Find all unique (org, date_published) combinations.
-        qs = Post.objects.all().values('date_published', 'feed__organizationfeed__organization').distinct()
+        #qs = Post.objects.all().values('date_published', 'feed__organizationfeed__organization').distinct()
+        
+        # Find all posts that have a corresponding organization feaure.
+        _qs0 = Post.objects.filter(date_published__isnull=False)
+        _qs1 = _qs0.filter(
+            feed__organizationfeed__organization__features__start_date__lte=F('date_published'),
+            feed__organizationfeed__organization__features__end_date__gte=F('date_published'),
+        )
+        
+        # Find all posts that aren't in that set, meaning they have no corresponding organization feature.
+        qs = _qs0
+        qs = qs.exclude(id__in=_qs1.values_list('id', flat=True))
+        qs = qs.values('date_published', 'feed__organizationfeed__organization').distinct()
+
         total = qs.count()
+        print('total:', total)
         i = 0
         for r in qs:
             i += 1
@@ -154,42 +175,33 @@ class OrganizationFeature(BaseModel):
                 end_date=end_date,
                 defaults=dict(fresh=False))
 
-        if force:
-            qs = cls.objects.all()
-        else:
-            qs = cls.objects.get_stale()
-        total = qs.count()
-        i = 0
-        for r in qs:
-            i += 1
-            ngrams = defaultdict(int)
-            posts = Post.objects.filter(
-                feed__organizationfeed__organization=r.organization,
-                date_published__gte=r.start_date,
-                date_published__lte=r.end_date,
-                article_ngrams_extracted=True)
-            total_posts = posts.count()
-            j = 0
-            for post in posts:
-                j += 1
-                if i == 1 or j == 1 or i == total or j == total_posts or not j % 10:
-                    sys.stdout.write('\rUpdating org feature %i of %i (post %i of %i)...' % (i, total, j, total_posts))
-                    sys.stdout.flush()
-                for gram, cnt in post.article_ngram_counts.items():
-                    ngrams[gram] += cnt
-            r.ngram_counts = dict(ngrams)
-            r.fresh = True
-            r.save()
-
-def dt_to_month_range(dt):
-    try:
-        _, total_days = calendar.monthrange(dt.year, dt.month)
-        start_date = date(dt.year, dt.month, 1)
-        end_date = date(dt.year, dt.month, total_days)
-        return start_date, end_date
-    except ValueError:
-        print('Unable to convert to range, invalid date:', dt)
-        raise
+        if do_ngrams:
+            if force:
+                qs = cls.objects.all()
+            else:
+                qs = cls.objects.get_stale()
+            total = qs.count()
+            i = 0
+            for r in qs:
+                i += 1
+                ngrams = defaultdict(int)
+                posts = Post.objects.filter(
+                    feed__organizationfeed__organization=r.organization,
+                    date_published__gte=r.start_date,
+                    date_published__lte=r.end_date,
+                    article_ngrams_extracted=True)
+                total_posts = posts.count()
+                j = 0
+                for post in posts:
+                    j += 1
+                    if i == 1 or j == 1 or i == total or j == total_posts or not j % 10:
+                        sys.stdout.write('\rUpdating org feature %i of %i (post %i of %i)...' % (i, total, j, total_posts))
+                        sys.stdout.flush()
+                    for gram, cnt in post.article_ngram_counts.items():
+                        ngrams[gram] += cnt
+                r.ngram_counts = dict(ngrams)
+                r.fresh = True
+                r.save()
 
 # Create and update an OrganizationFeature after every feedz.Post is saved.
 @receiver(post_save, sender=Post)
@@ -264,29 +276,38 @@ class TFIDF(object):
         return tf * idf
 
 class ClusterCriteria(BaseModel):
-    
+
     KMEANS = 'kmeans'
     KMEANS_EVEN = 'kmeans-even'
+    BAYESIAN_SENTIMENT_NYT = 'bayesian-sentiment-nyt'
     ALGORITHM_CHOICES = [
         (KMEANS, 'K-Means'),
         (KMEANS_EVEN, 'K-Means-Even'),
+        (BAYESIAN_SENTIMENT_NYT, 'Bayesian Sentiment (NYT)'),
     ]
-
-    number_of_clusters = models.PositiveIntegerField(default=2, blank=False, null=False)
 
     algorithm = models.CharField(max_length=50, choices=ALGORITHM_CHOICES, default=KMEANS, blank=False, null=False)
 
     start_date = models.DateField(blank=False, null=False)
 
+    number_of_clusters = models.PositiveIntegerField(default=2, blank=False, null=False)
+
+    term = models.CharField(max_length=50, blank=True, null=True,
+        help_text='Term to calculate sentimate for. Only used for the Bayesian Sentiment algorithm')
+
     class Meta:
         unique_together = (
-            ('number_of_clusters', 'algorithm'),
+            ('algorithm', 'number_of_clusters', 'term'),
         )
 
     def __str__(self):
-        return u'Clusters=%i, Algo=%s, Start=%s' % (self.number_of_clusters, self.algorithm, self.start_date)
+        return u'Algo=%s, Clusters=%i, Term=%s, Start=%s' % (self.algorithm, self.number_of_clusters, self.term, self.start_date)
 
     def save(self, *args, **kwargs):
+
+        self.term = (self.term or '').strip().lower() or None
+        if self.term:
+            self.number_of_clusters = 0
 
         self.start_date = date(self.start_date.year, self.start_date.month, 1)
 
@@ -314,7 +335,11 @@ class ClusterCriteria(BaseModel):
                     start_date=r.start_date,
                     end_date=r.end_date)
 
-            if criteria.algorithm == KMEANS:
+            if criteria.algorithm == cls.KMEANS:
+                print('Loading scipy...')
+                from sklearn.feature_extraction import DictVectorizer
+                from sklearn.cluster import KMeans
+                #from scipy.sparse import vstack
 
                 # Collect data.
                 k_means_keys = [] # [orgfeature_id]
@@ -369,7 +394,7 @@ class ClusterCriteria(BaseModel):
                     clabel.index = label
                     clabel.save()
 
-            elif criteria.algorithm == KMEANS_EVEN:
+            elif criteria.algorithm == cls.KMEANS_EVEN:
 
                 print('Collecting data for K-means-even...')
                 tfidf = TFIDF()
@@ -485,6 +510,59 @@ class ClusterCriteria(BaseModel):
                         clabel.index = label
                         clabel.save()
 
+            elif criteria.algorithm == cls.BAYESIAN_SENTIMENT_NYT:
+                from .sentiment import sentiment
+
+                features = OrganizationFeature.objects.filter(
+                    start_date__gte=criteria.start_date,
+                    #fresh=False
+                )
+                #start_date = date(2017, 5, 1)
+                #org_target = Organization.objects.get(id=int(org_id))
+                #print('org_target:', org_target)
+                #feature1 = OrganizationFeature.objects.get(organization=org_target, start_date=start_date)
+                #print('Getting text for target...')
+                #text1 = ' '.join(feature1.get_all_text(keywords=options['keywords']))
+                #print('len:', len(text1))
+
+                scores = [] # [(sim to target, other org)]
+                #others = Organization.objects.all()
+                _total = features.count()
+                print('%i org features for sentiment' % _total)
+                _i = 0
+                for feature in features:
+                    _i += 1
+                    print('Processing sentiment for org %i of %i %.02f%%...' % (_i, _total, float(_i)/_total*100))
+
+                    print('Getting text for %s...' % feature)
+                    text2 = ' '.join(feature.get_all_text(keywords=criteria.term))
+                    print('len:', len(text2))
+
+                    print('Calculating sentiment...')
+                    t0 = time.time()
+                    logprob = sentiment(text2)
+                    td = time.time() - t0
+
+                    print('Calculated sim %s in %s seconds.' % (logprob, td))
+                    #scores.append((logprob, other_org))
+                    label, _ = ClusterLabel.objects.get_or_create(
+                        criteria=criteria,
+                        organization=feature.organization,
+                        start_date=feature.start_date,
+                        end_date=feature.end_date)
+                    label.logprob = logprob
+                    label.fresh = True
+                    label.save()
+
+                    type(feature).objects.filter(id=feature.id).update(fresh=True)
+
+                #print('-'*80)
+                #scores.sort()
+                #print('POS scores:')
+                #for lp, _org in scores:
+                    #print('%.09f %s (%s)' % (lp, _org, e**lp))
+                #pass
+
             else:
                 raise NotImplementedError
 
@@ -519,23 +597,31 @@ class ClusterLabel(BaseModel):
 
     index = models.PositiveIntegerField(blank=True, null=True, db_index=True)
 
+    logprob = models.FloatField(blank=True, null=True, db_index=True)
+
+    @property
+    def prob(self):
+        return e**self.logprob
+
     class Meta:
         unique_together = (
             ('criteria', 'organization', 'start_date', 'end_date'),
         )
+#TODO:mark stale when
+#post made linked to organization's feed within the given date range
 
 class ClusterLink(BaseModel):
-    
+
     criteria = models.ForeignKey(ClusterCriteria, related_name='links')
-    
+
     from_organization = models.ForeignKey(Organization, related_name='from_links')
 
     start_date = models.DateField(blank=False, null=False)
 
     end_date = models.DateField(blank=False, null=False)
-    
+
     to_organization = models.ForeignKey(Organization, related_name='to_links')
-    
+
     weight = models.FloatField(blank=True, null=True)
 
     class Meta:

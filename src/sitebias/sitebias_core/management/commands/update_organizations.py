@@ -21,14 +21,16 @@ class Command(BaseCommand):
                     help="If given, no database changes will be made.")
         parser.add_argument('--force', action="store_true", default=False,
                     help="If given, all will be updated.")
-        parser.add_argument('--no-feeds', action="store_true", default=False,
+        parser.add_argument('--feeds', action="store_true", default=False,
                     help="If given, feed links won't be checked.")
-        parser.add_argument('--no-features', action="store_true", default=False,
+        parser.add_argument('--features', action="store_true", default=False,
                     help="If given, features won't be checked.")
-        parser.add_argument('--no-clusters', action="store_true", default=False,
+        parser.add_argument('--clusters', action="store_true", default=False,
                     help="If given, clusters won't be checked.")
         parser.add_argument('--criterias', default='',
                     help="The cluster criterias to check.")
+        parser.add_argument('--do-ngrams', action='store_true', default=False,
+                    help="If given, updates n-grams aggregates.")
         self.add_arguments(parser)
         return parser
 
@@ -62,7 +64,7 @@ class Command(BaseCommand):
         force = options['force']
         org_ids = list(map(int, [_ for _ in args if _.strip().isdigit()]))
 
-        if not options['no_feeds']:
+        if options['feeds']:
             if force:
                 qs = Organization.objects.all()
             else:
@@ -78,9 +80,9 @@ class Command(BaseCommand):
                 sys.stdout.flush()
                 org.check_homepage_for_feeds(dryrun=dryrun)
 
-        if not options['no_features']:
-            OrganizationFeature.update_all()
+        if options['features']:
+            OrganizationFeature.update_all(do_ngrams=options['do_ngrams'])
 
-        if not options['no_clusters']:
+        if options['clusters']:
             criterias = [int(_) for _ in options['criterias'].split() if _.strip().isdigit()]
             ClusterCriteria.update_all(criterias_ids=criterias)
